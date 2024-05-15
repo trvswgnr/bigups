@@ -15,19 +15,19 @@ type EventMap = {
 
 type IncMsg = typeof IncomingMessage;
 
-export default class Server<
+export default class<
     S extends HTTPServer<V> | HTTPSServer<V>,
     V extends IncMsg = IncMsg,
 > extends EventEmitter<EventMap> {
     private wss: WebSocket.Server<typeof WebSocket, V>;
     private started = false;
 
-    constructor(server: S) {
+    constructor(private server: S) {
         super();
         this.wss = new WebSocket.Server({ server });
     }
 
-    public start() {
+    private start() {
         if (this.started) {
             return;
         }
@@ -66,6 +66,11 @@ export default class Server<
 
             ws.on("error", (err) => this.emit("error", err));
         });
+    }
+
+    public listen(port?: number, listener?: () => void) {
+        this.start();
+        this.server.listen(port, listener);
     }
 
     public metadata() {
