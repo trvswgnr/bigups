@@ -1,7 +1,7 @@
 import { IncomingMessage, Server as HTTPServer } from "http";
 import { Server as HTTPSServer } from "https";
 import WebSocket from "ws";
-import { Metadata, ns as shared_ns } from "../shared";
+import { Metadata, Result, asyncIterable } from "../shared";
 import { EventEmitter } from "stream";
 
 type EventMap = {
@@ -15,11 +15,12 @@ type EventMap = {
 
 type IncMsg = typeof IncomingMessage;
 
-export default class<
+export default class Server<
     S extends HTTPServer<V> | HTTPSServer<V>,
     V extends IncMsg = IncMsg,
 > extends EventEmitter<EventMap> {
     private wss: WebSocket.Server<typeof WebSocket, V>;
+    private started = false;
 
     constructor(server: S) {
         super();
@@ -27,6 +28,10 @@ export default class<
     }
 
     public start() {
+        if (this.started) {
+            return;
+        }
+        this.started = true;
         this.wss.on("connection", (ws) => {
             this.emit("start");
             ws.on("message", (rawData, isBinary) => {
@@ -60,6 +65,36 @@ export default class<
             });
 
             ws.on("error", (err) => this.emit("error", err));
+        });
+    }
+
+    public metadata() {
+        const promise = new Result<Metadata, Error>((resolve, reject) => {
+            // if the client doesn't send metadata in 5 seconds, something's probably wrong
+            setTimeout(() => reject(new Error("timed out")), 5000);
+            this.on("metadata", resolve);
+            this.on("error", reject);
+            this.on("done", () => reject(new Error("already done")));
+        });
+        this.start();
+        return promise;
+    }
+
+    public chunks() {
+        const iter = asyncIterable(async () => {
+            return await this.get_next_chunk().catch((e) => e);
+        });
+        this.start();
+        return iter;
+    }
+
+    private get_next_chunk() {
+        return new Result<Buffer, Error>((resolve, reject) => {
+            // if the client doesn't send a chunk in 5 seconds, something's probably wrong
+            setTimeout(() => reject(new Error("timed out")), 5000);
+            this.on("chunk", resolve);
+            this.on("error", reject);
+            this.on("done", () => reject(new Error("already done")));
         });
     }
 }
