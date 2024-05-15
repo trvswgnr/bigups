@@ -31,15 +31,8 @@ export namespace Metadata {
     }
 }
 
-export function isObject(x: unknown): x is Record<PropertyKey, unknown> {
+function isObject(x: unknown): x is Record<PropertyKey, unknown> {
     return typeof x === "object" && x !== null;
-}
-
-export function isObjectWithKey<K extends string>(
-    x: unknown,
-    key: K,
-): x is Record<K, unknown> {
-    return isObject(x) && key in x;
 }
 
 type PrimitiveMap = {
