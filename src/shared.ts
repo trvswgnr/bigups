@@ -86,3 +86,45 @@ export function ns<T extends string[]>(...args: T): Namespaced<T> {
 }
 
 export function noop(..._: any[]) {}
+
+export function asyncIterable<T>(
+    f: () => Promise<T | Error>,
+): AsyncIterable<T> {
+    return {
+        [Symbol.asyncIterator]: (): AsyncIterator<T, void, undefined> => {
+            return {
+                next: async () => {
+                    const value = await f();
+                    if (value instanceof Error) {
+                        return { value: undefined, done: true };
+                    }
+                    return { value };
+                },
+            };
+        },
+    };
+}
+
+export class Result<T, E> extends Promise<T> {
+    constructor(
+        executor: (
+            resolve: (value: T | PromiseLike<T>) => void,
+            reject: (reason: E) => void,
+        ) => void,
+    ) {
+        super(executor);
+    }
+
+    catch<R>(onRejected: (reason: E) => R | PromiseLike<R>) {
+        return super.catch(onRejected);
+    }
+}
+
+export type Identity<T> = T extends Error
+    ? T
+    : {
+          [K in keyof T]: T[K] extends object ? Identity<T[K]> : T[K];
+      } & {};
+export function Identity<T>(x: T): Identity<T> {
+    return x as Identity<T>;
+}
