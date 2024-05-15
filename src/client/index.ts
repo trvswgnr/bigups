@@ -1,8 +1,9 @@
-import { Metadata, namespaced } from "../shared";
+import { Metadata, ns } from "../shared";
 
+const NS_PROGRESS = ns("client", "progress");
 const DEFAULT_CHUNK_SIZE = 1024 * 1024; // 1MB
 
-export default class Client {
+export default class {
     private ws: WebSocket;
     private chunkSize: number;
     private file: File;
@@ -32,7 +33,7 @@ export default class Client {
     ): void;
     public on(event: string, listener: (event: any) => void) {
         if (event === "progress") {
-            this.ws.addEventListener(namespaced("progress"), listener);
+            this.ws.addEventListener(NS_PROGRESS, listener);
             return;
         }
         this.ws.addEventListener(event, listener);
@@ -62,7 +63,7 @@ export default class Client {
             }
 
             // close the connection
-            ws.close();
+            ws.close(1000, "success");
         });
     }
 }
@@ -75,7 +76,7 @@ type UploadProgressEventInit = ProgressEventInit & {
 class UploadProgressEvent extends ProgressEvent {
     public readonly progress: number;
     constructor(init: UploadProgressEventInit) {
-        super(namespaced("progress"), init);
+        super(NS_PROGRESS, init);
         this.progress = (init.loaded / init.total) * 100;
     }
 }

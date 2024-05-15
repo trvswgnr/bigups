@@ -1,6 +1,13 @@
-export const NAMESPACE = "chonky";
-export type NAMESPACE = typeof NAMESPACE;
-export type Namespaced<T extends string> = `${NAMESPACE}:${T}`;
+export const NAMESPACE = "bigups";
+
+export type Namespaced<
+    T extends Array<string> | TemplateStringsArray,
+    Acc extends string = `${typeof NAMESPACE}`,
+> = T extends TemplateStringsArray
+    ? `${Acc}:${string}`
+    : T extends [infer F extends string, ...infer R extends string[]]
+    ? Namespaced<R, `${Acc}:${F}`>
+    : Acc;
 
 export type Metadata = {
     filename: string;
@@ -69,8 +76,13 @@ export function is_nullish(x: unknown): x is null | undefined {
     return x === null || x === undefined;
 }
 
-export function namespaced<T extends string>(x: T): Namespaced<T> {
-    return `${NAMESPACE}:${x}`;
+export function ns<T extends TemplateStringsArray>(t: T): Namespaced<T>;
+export function ns<T extends string[]>(...args: T): Namespaced<T>;
+export function ns<T extends string[]>(...args: T): Namespaced<T> {
+    return args.reduce(
+        (acc, curr) => `${acc}:${curr}`,
+        NAMESPACE,
+    ) as Namespaced<T>;
 }
 
 export function noop(..._: any[]) {}

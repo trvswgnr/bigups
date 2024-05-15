@@ -1,11 +1,14 @@
 {
   "name": "bigups",
+  "description": "BigUps makes it easy to upload very large files from the client and handle them on the server.",
   "type": "module",
   "scripts": {
     "build": "tsup"
   },
   "devDependencies": {
+    "@types/bun": "^1.1.2",
     "@types/node": "^20.12.12",
+    "@types/ws": "^8.5.10",
     "tsup": "^8.0.2",
     "typescript": "^5.4.5"
   },
@@ -21,5 +24,8 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "dependencies": {
+    "ws": "^8.17.0"
+  }
 }
