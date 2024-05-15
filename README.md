@@ -8,6 +8,7 @@ BigUps makes it easy to upload very large files from the client and handle them 
 -   Supports uploading files of any size
 -   Progress tracking for uploads
 -   Automatically chunks files for efficient transfer
+-   Utilizes websockets, avoiding excessive requests.
 
 ## Installation
 
