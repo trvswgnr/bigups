@@ -13,34 +13,34 @@ type EventMap = {
     done: [number, string];
 };
 
-type TIncomingMessage = typeof IncomingMessage;
-type TServerResponse = typeof ServerResponse;
-type TWebSocket = typeof WebSocket;
+type Message = typeof IncomingMessage;
+type ServerRes = typeof ServerResponse;
+type Socket = typeof WebSocket;
 
-type NodeServer<T extends TIncomingMessage, S extends TServerResponse> =
+type NodeServer<T extends Message, S extends ServerRes> =
     | HTTPServer<T, S>
     | HTTPSServer<T, S>;
 
-type WebSocketOptions<
-    Ws extends TWebSocket,
-    Request extends TIncomingMessage,
-> = Omit<WebSocket.ServerOptions<Ws, Request>, "server">;
+type WebSocketOptions<Ws extends Socket, Request extends Message> = Omit<
+    WebSocket.ServerOptions<Ws, Request>,
+    "server"
+>;
 
 // states
-const Base = Symbol("Base");
+declare const Base: unique symbol;
+declare const Initialized: unique symbol;
+declare const Upgraded: unique symbol;
+declare const Listening: unique symbol;
 type Base = typeof Base;
-const Initialized = Symbol("Initialized");
 type Initialized = typeof Initialized;
-const Upgraded = Symbol("Upgraded");
 type Upgraded = typeof Upgraded;
-const Listening = Symbol("Listening");
 type Listening = typeof Listening;
 
 class BigUpsClass<
-    TMsg extends TIncomingMessage,
-    TRes extends TServerResponse,
+    TMsg extends Message,
+    TRes extends ServerRes,
     TServer extends NodeServer<TMsg, TRes>,
-    TSocket extends TWebSocket,
+    TSocket extends Socket,
 > {
     private started = false;
     private wss?: WebSocket.Server<TSocket, TMsg>;
@@ -52,8 +52,8 @@ class BigUpsClass<
     }
 
     public static init<
-        T extends TIncomingMessage,
-        R extends TServerResponse,
+        T extends Message,
+        R extends ServerRes,
         S extends HTTPServer<T, R> | HTTPSServer<T, R>,
     >(server: S) {
         return new BigUpsClass(server);
@@ -73,7 +73,7 @@ class BigUpsClass<
         listener: () => void,
     ): BigUps<Listening, TMsg, TRes, TServer, TSocket> {
         this.server = this.server.listen(port, listener) as TServer;
-        return Object.assign(this as any, this.server);
+        return this.server as UpgradedServer<TServer>;
     }
 
     public on(name: string, listener: any) {
@@ -139,6 +139,10 @@ class BigUpsClass<
         return promise;
     }
 
+    public ping() {
+        console.log("ping");
+    }
+
     public chunks() {
         const iter = asyncIterable(async () => {
             return await this.get_next_chunk().catch((e) => e);
@@ -158,31 +162,23 @@ class BigUpsClass<
     }
 }
 
-type BigUps<
-    State extends keyof StateMap<Request, Response, Server, Ws>,
-    Request extends TIncomingMessage = never,
-    Response extends TServerResponse = never,
-    Server extends NodeServer<Request, Response> = never,
-    Ws extends TWebSocket = never,
-> = StateMap<Request, Response, Server, Ws>[State];
-
 type StateMap<
-    TMsg extends TIncomingMessage,
-    TRes extends TServerResponse,
-    TServer extends NodeServer<TMsg, TRes>,
-    TSocket extends TWebSocket,
+    TMsg extends Message = never,
+    TRes extends ServerRes = never,
+    TServer extends NodeServer<TMsg, TRes> = never,
+    TSocket extends Socket = never,
 > = {
     [Base]: {
         init: <
-            T extends TIncomingMessage,
-            R extends TServerResponse,
+            T extends Message,
+            R extends ServerRes,
             S extends HTTPServer<T, R> | HTTPSServer<T, R>,
         >(
             server: S,
         ) => BigUps<Initialized, T, R, S>;
     };
     [Initialized]: WithEventEmitter<{
-        upgrade: <T extends TWebSocket>(
+        upgrade: <T extends Socket>(
             options?: WebSocketOptions<T, TMsg>,
         ) => BigUps<Upgraded, TMsg, TRes, TServer, T>;
     }>;
@@ -192,8 +188,10 @@ type StateMap<
             listener: () => void,
         ) => BigUps<Listening, TMsg, TRes, TServer, TSocket>;
     }>;
-    [Listening]: WithEventEmitter<Omit<TServer, keyof EventEmitter>>;
+    [Listening]: UpgradedServer<TServer>;
 };
+
+type UpgradedServer<T> = T & { [Upgraded]: true };
 
 interface Listeners<T> {
     (name: "metadata", listener: (metadata: Metadata) => void): T;
@@ -203,10 +201,19 @@ interface Listeners<T> {
     (name: "success", listener: () => void): T;
     (name: "done", listener: (code: number, reason: string) => void): T;
 }
+
 type WithEventEmitter<T> = T & {
     on: Listeners<WithEventEmitter<T>>;
 };
 
-const BigUps: BigUps<Base> = BigUpsClass as any;
+type BigUps<
+    State extends keyof StateMap,
+    Request extends Message = never,
+    Response extends ServerRes = never,
+    Server extends NodeServer<Request, Response> = never,
+    Ws extends Socket = never,
+> = StateMap<Request, Response, Server, Ws>[State];
+
+const BigUps: BigUps<Base> = BigUpsClass;
 
 export default BigUps;
