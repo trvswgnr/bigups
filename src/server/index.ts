@@ -1,9 +1,4 @@
-import {
-    Server as HTTPServer,
-    ServerResponse,
-    IncomingMessage,
-    type RequestListener,
-} from "http";
+import { Server as HTTPServer, ServerResponse, IncomingMessage } from "http";
 import { Server as HTTPSServer } from "https";
 import WebSocket from "ws";
 import { Metadata, Result, asyncIterable } from "../shared";
