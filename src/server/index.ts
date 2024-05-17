@@ -1,7 +1,7 @@
 import { Server as HTTPServer, ServerResponse, IncomingMessage } from "http";
 import { Server as HTTPSServer } from "https";
 import WebSocket from "ws";
-import { Metadata, Result, asyncIterable } from "../shared";
+import { Metadata, Result, asyncIterable, ns } from "../shared";
 import { EventEmitter } from "stream";
 
 type EventMap = {
@@ -39,15 +39,15 @@ type Listening = typeof Listening;
 class BigUpsClass<
     TMsg extends TIncomingMessage,
     TRes extends TServerResponse,
-    TSocket extends TWebSocket,
     TServer extends NodeServer<TMsg, TRes>,
-> extends EventEmitter<EventMap> {
+    TSocket extends TWebSocket,
+> {
     private started = false;
     private wss?: WebSocket.Server<TSocket, TMsg>;
     private server: TServer;
+    private ee = new EventEmitter<EventMap>();
 
     private constructor(server: TServer) {
-        super();
         this.server = server;
     }
 
@@ -68,9 +68,22 @@ class BigUpsClass<
         return this;
     }
 
-    public listen(port: number, listener: () => void) {
+    public listen(
+        port: number,
+        listener: () => void,
+    ): BigUps<Listening, TMsg, TRes, TServer, TSocket> {
         this.server = this.server.listen(port, listener) as TServer;
-        return this.server;
+        return Object.assign(this as any, this.server);
+    }
+
+    public on(name: string, listener: any) {
+        this.ee.on(ns(name), listener as never);
+        return this;
+    }
+
+    private emit<K extends keyof EventMap>(name: K, ...args: EventMap[K]) {
+        this.ee.emit(ns(name), ...(args as any));
+        return this;
     }
 
     private start() {
@@ -153,12 +166,12 @@ type BigUps<
     Ws extends TWebSocket = never,
 > = StateMap<Request, Response, Server, Ws>[State];
 
-interface StateMap<
+type StateMap<
     TMsg extends TIncomingMessage,
     TRes extends TServerResponse,
     TServer extends NodeServer<TMsg, TRes>,
     TSocket extends TWebSocket,
-> {
+> = {
     [Base]: {
         init: <
             T extends TIncomingMessage,
@@ -168,20 +181,32 @@ interface StateMap<
             server: S,
         ) => BigUps<Initialized, T, R, S>;
     };
-    [Initialized]: {
+    [Initialized]: WithEventEmitter<{
         upgrade: <T extends TWebSocket>(
             options?: WebSocketOptions<T, TMsg>,
         ) => BigUps<Upgraded, TMsg, TRes, TServer, T>;
-    };
-    [Upgraded]: {
+    }>;
+    [Upgraded]: WithEventEmitter<{
         listen: (
             port: number,
             listener: () => void,
         ) => BigUps<Listening, TMsg, TRes, TServer, TSocket>;
-    };
-    [Listening]: TServer;
-}
+    }>;
+    [Listening]: WithEventEmitter<Omit<TServer, keyof EventEmitter>>;
+};
 
-const BigUps: BigUps<Base> = BigUpsClass;
+interface Listeners<T> {
+    (name: "metadata", listener: (metadata: Metadata) => void): T;
+    (name: "chunk", listener: (chunk: Buffer) => void): T;
+    (name: "start", listener: () => void): T;
+    (name: "error", listener: (error: Error) => void): T;
+    (name: "success", listener: () => void): T;
+    (name: "done", listener: (code: number, reason: string) => void): T;
+}
+type WithEventEmitter<T> = T & {
+    on: Listeners<WithEventEmitter<T>>;
+};
+
+const BigUps: BigUps<Base> = BigUpsClass as any;
 
 export default BigUps;
