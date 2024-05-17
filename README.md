@@ -39,20 +39,24 @@ client.upload();
 ### Server
 
 ```typescript
-import Server from "bigups/server";
+import http from "http";
+import BigUps from "bigups/server";
 
-const server = new Server();
-
-// metadata is the first message sent by the client
-server.on("metadata", (metadata: Metadata) => {
-    console.log(`Received file: ${metadata.filename} (${metadata.size} bytes)`);
+const og = http.createServer((_, res) => {
+    // normal server stuff here
 });
 
-server.on("chunk", (chunk: Buffer) => {
-    console.log(`Received chunk: ${chunk.length} bytes`);
-});
-
-server.listen(3000);
+const server = BigUps.init(original)
+    .upgrade()
+    .on("start", () => console.log("start"))
+    .on("metadata", (metadata) => console.log("metadata", metadata))
+    .on("chunk", (chunk) => console.log("chunk", chunk))
+    .on("success", () => console.log("success"))
+    .on("done", (code, reason) => console.log("done", code, reason))
+    .on("error", (error) => console.error("error", error))
+    .listen(3000, () => {
+        console.log("listening on http://localhost:3000");
+    });
 ```
 
 ## Contributing
