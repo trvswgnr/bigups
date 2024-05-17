@@ -1,12 +1,22 @@
 import BigUps from "../src/client";
 
-const form_el = document.querySelector("form");
-const input_el = document.querySelector("input");
-form_el?.addEventListener("submit", (e) => {
+const formEl = document.querySelector("form");
+const inputEl = document.querySelector("input");
+const progressEl = document.querySelector("progress");
+if (!formEl || !inputEl || !progressEl) {
+    throw new Error("Missing expected elements");
+}
+
+formEl.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const file = input_el?.files?.[0];
+
+    const file = inputEl?.files?.[0];
     if (!file) return;
 
-    const bigups = new BigUps("ws://localhost:3000", file);
-    bigups.upload();
+    const bigups = await BigUps.init("ws://localhost:3000")
+        .on("progress", (e) => {
+            progressEl.value = e.progress;
+        })
+        .on("close", () => alert("upload complete!"))
+        .upload(file);
 });
