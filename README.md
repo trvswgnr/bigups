@@ -21,19 +21,29 @@ npm install bigups
 ### Client
 
 ```typescript
-import Client from "bigups/client";
+import BigUps from "bigups/client";
 
-const client = new Client("ws://localhost:3000", file);
+const formEl = document.querySelector("form");
+const inputEl = document.querySelector("input");
+const progressEl = document.querySelector("progress");
 
-client.on("progress", (event: UploadProgressEvent) => {
-    console.log(`Upload progress: ${event.progress}%`);
+if (!formEl || !inputEl || !progressEl) {
+    throw new Error("Missing expected elements");
+}
+
+formEl.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const file = inputEl?.files?.[0];
+    if (!file) return;
+
+    const bigups = await BigUps.init("ws://localhost:3000")
+        .on("progress", (e) => {
+            progressEl.value = e.progress;
+        })
+        .on("close", () => alert("upload complete!"))
+        .upload(file);
 });
-
-client.on("close", (event: CloseEvent) => {
-    console.log(`WebSocket connection closed: ${event.code} ${event.reason}`);
-});
-
-client.upload();
 ```
 
 ### Server
