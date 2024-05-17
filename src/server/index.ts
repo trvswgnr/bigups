@@ -1,4 +1,9 @@
-import { IncomingMessage, Server as HTTPServer } from "http";
+import {
+    Server as HTTPServer,
+    ServerResponse,
+    IncomingMessage,
+    type RequestListener,
+} from "http";
 import { Server as HTTPSServer } from "https";
 import WebSocket from "ws";
 import { Metadata, Result, asyncIterable } from "../shared";
@@ -13,18 +18,64 @@ type EventMap = {
     done: [number, string];
 };
 
-type IncMsg = typeof IncomingMessage;
+type TIncomingMessage = typeof IncomingMessage;
+type TServerResponse = typeof ServerResponse;
+type TWebSocket = typeof WebSocket;
 
-export default class<
-    S extends HTTPServer<V> | HTTPSServer<V>,
-    V extends IncMsg = IncMsg,
+type NodeServer<T extends TIncomingMessage, S extends TServerResponse> =
+    | HTTPServer<T, S>
+    | HTTPSServer<T, S>;
+
+type WebSocketOptions<
+    Ws extends TWebSocket,
+    Request extends TIncomingMessage,
+> = Omit<WebSocket.ServerOptions<Ws, Request>, "server">;
+
+// states
+const Base = Symbol("Base");
+type Base = typeof Base;
+const Initialized = Symbol("Initialized");
+type Initialized = typeof Initialized;
+const Upgraded = Symbol("Upgraded");
+type Upgraded = typeof Upgraded;
+const Listening = Symbol("Listening");
+type Listening = typeof Listening;
+
+class BigUpsClass<
+    TMsg extends TIncomingMessage,
+    TRes extends TServerResponse,
+    TSocket extends TWebSocket,
+    TServer extends NodeServer<TMsg, TRes>,
 > extends EventEmitter<EventMap> {
-    private wss: WebSocket.Server<typeof WebSocket, V>;
     private started = false;
+    private wss?: WebSocket.Server<TSocket, TMsg>;
+    private server: TServer;
 
-    constructor(private server: S) {
+    private constructor(server: TServer) {
         super();
-        this.wss = new WebSocket.Server({ server });
+        this.server = server;
+    }
+
+    public static init<
+        T extends TIncomingMessage,
+        R extends TServerResponse,
+        S extends HTTPServer<T, R> | HTTPSServer<T, R>,
+    >(server: S) {
+        return new BigUpsClass(server);
+    }
+
+    public upgrade<T extends TSocket>(options?: WebSocketOptions<T, TMsg>) {
+        this.wss = new WebSocket.Server({
+            server: this.server,
+            ...options,
+        });
+        this.start();
+        return this;
+    }
+
+    public listen(port: number, listener: () => void) {
+        this.server = this.server.listen(port, listener) as TServer;
+        return this.server;
     }
 
     private start() {
@@ -32,7 +83,7 @@ export default class<
             return;
         }
         this.started = true;
-        this.wss.on("connection", (ws) => {
+        this.wss!.on("connection", (ws) => {
             this.emit("start");
             ws.on("message", (rawData, isBinary) => {
                 if (!isBinary) {
@@ -68,11 +119,6 @@ export default class<
         });
     }
 
-    public listen(port?: number, listener?: () => void) {
-        this.start();
-        this.server.listen(port, listener);
-    }
-
     public metadata() {
         const promise = new Result<Metadata, Error>((resolve, reject) => {
             // if the client doesn't send metadata in 5 seconds, something's probably wrong
@@ -103,3 +149,44 @@ export default class<
         });
     }
 }
+
+type BigUps<
+    State extends keyof StateMap<Request, Response, Server, Ws>,
+    Request extends TIncomingMessage = never,
+    Response extends TServerResponse = never,
+    Server extends NodeServer<Request, Response> = never,
+    Ws extends TWebSocket = never,
+> = StateMap<Request, Response, Server, Ws>[State];
+
+interface StateMap<
+    TMsg extends TIncomingMessage,
+    TRes extends TServerResponse,
+    TServer extends NodeServer<TMsg, TRes>,
+    TSocket extends TWebSocket,
+> {
+    [Base]: {
+        init: <
+            T extends TIncomingMessage,
+            R extends TServerResponse,
+            S extends HTTPServer<T, R> | HTTPSServer<T, R>,
+        >(
+            server: S,
+        ) => BigUps<Initialized, T, R, S>;
+    };
+    [Initialized]: {
+        upgrade: <T extends TWebSocket>(
+            options?: WebSocketOptions<T, TMsg>,
+        ) => BigUps<Upgraded, TMsg, TRes, TServer, T>;
+    };
+    [Upgraded]: {
+        listen: (
+            port: number,
+            listener: () => void,
+        ) => BigUps<Listening, TMsg, TRes, TServer, TSocket>;
+    };
+    [Listening]: TServer;
+}
+
+const BigUps: BigUps<Base> = BigUpsClass;
+
+export default BigUps;
